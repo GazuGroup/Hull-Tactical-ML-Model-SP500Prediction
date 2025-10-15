@@ -1,1 +1,1600 @@
-{"metadata":{"kernelspec":{"language":"python","display_name":"Python 3","name":"python3"},"language_info":{"name":"python","version":"3.11.13","mimetype":"text/x-python","codemirror_mode":{"name":"ipython","version":3},"pygments_lexer":"ipython3","nbconvert_exporter":"python","file_extension":".py"},"kaggle":{"accelerator":"none","dataSources":[{"sourceId":111543,"databundleVersionId":13750964,"sourceType":"competition"}],"dockerImageVersionId":31153,"isInternetEnabled":true,"language":"python","sourceType":"notebook","isGpuEnabled":false}},"nbformat_minor":4,"nbformat":4,"cells":[{"cell_type":"code","source":"# This Python 3 environment comes with many helpful analytics libraries installed\n# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python\n# For example, here's several helpful packages to load\n\nimport numpy as np # linear algebra\nimport pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)\n\n# Input data files are available in the read-only \"../input/\" directory\n# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory\n\nimport os\nfor dirname, _, filenames in os.walk('/kaggle/input'):\n    for filename in filenames:\n        print(os.path.join(dirname, filename))\n\n# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using \"Save & Run All\" \n# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session","metadata":{"_uuid":"8f2839f25d086af736a60e9eeb907d3b93b6e0e5","_cell_guid":"b1076dfc-b9ad-4769-8c92-a6c4dae69d19","trusted":true},"outputs":[],"execution_count":null},{"cell_type":"markdown","source":"# Competition: Hull Tactical - Market Prediction\n**Author:** Yagazie Anyanwu  \n**Kaggle Profile:** [https://www.kaggle.com/yagazieanyanwu]","metadata":{}},{"cell_type":"code","source":"import os\nimport numpy as np\nimport pandas as pd\nimport polars as pl\nimport matplotlib.pyplot as plt\nimport yfinance as yf\nimport tensorflow as tf\n\nimport tensorflow as tf\nfrom tensorflow.keras import layers\n\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import LinearRegression\nfrom sklearn.ensemble import RandomForestRegressor\nfrom sklearn.impute import SimpleImputer\nfrom sklearn.metrics import mean_squared_error, r2_score\n\nimport statsmodels.api as sm\nimport statsmodels.tsa.api as tsa\n\nfrom scipy import stats, optimize, signal","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:25:09.729911Z","iopub.execute_input":"2025-10-11T19:25:09.730274Z","iopub.status.idle":"2025-10-11T19:25:09.754142Z","shell.execute_reply.started":"2025-10-11T19:25:09.730249Z","shell.execute_reply":"2025-10-11T19:25:09.752887Z"}},"outputs":[],"execution_count":28},{"cell_type":"code","source":"for dirname, _, filenames in os.walk('/kaggle/input'):\n    for filename in filenames:\n        print(os.path.join(dirname, filename))","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:25:51.910104Z","iopub.execute_input":"2025-10-11T18:25:51.910751Z","iopub.status.idle":"2025-10-11T18:25:51.953650Z","shell.execute_reply.started":"2025-10-11T18:25:51.910721Z","shell.execute_reply":"2025-10-11T18:25:51.952017Z"}},"outputs":[{"name":"stdout","text":"/kaggle/input/hull-tactical-market-prediction/train.csv\n/kaggle/input/hull-tactical-market-prediction/test.csv\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_inference_server.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_gateway.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/__init__.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/templates.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/base_gateway.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/relay.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/kaggle_evaluation.proto\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/__init__.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2_grpc.py\n/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/__init__.py\n","output_type":"stream"}],"execution_count":2},{"cell_type":"code","source":"train_path = '/kaggle/input/hull-tactical-market-prediction/train.csv'\ntest_path = '/kaggle/input/hull-tactical-market-prediction/test.csv'\n\ntrain_df = pd.read_csv(train_path)\ntest_df = pd.read_csv(test_path)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:26:17.114204Z","iopub.execute_input":"2025-10-11T18:26:17.114542Z","iopub.status.idle":"2025-10-11T18:26:17.486916Z","shell.execute_reply.started":"2025-10-11T18:26:17.114508Z","shell.execute_reply":"2025-10-11T18:26:17.485715Z"}},"outputs":[],"execution_count":3},{"cell_type":"code","source":"print(\"Train shape:\", train_df.shape)\nprint(\"Test shape:\", test_df.shape)\n\nprint(\"Train columns:\", train_df.columns)\nprint(\"Test columns:\", test_df.columns)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:26:28.039409Z","iopub.execute_input":"2025-10-11T18:26:28.039802Z","iopub.status.idle":"2025-10-11T18:26:28.049117Z","shell.execute_reply.started":"2025-10-11T18:26:28.039777Z","shell.execute_reply":"2025-10-11T18:26:28.047632Z"}},"outputs":[{"name":"stdout","text":"Train shape: (8990, 98)\nTest shape: (10, 99)\nTrain columns: Index(['date_id', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'E1',\n       'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17', 'E18', 'E19',\n       'E2', 'E20', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'I1', 'I2', 'I3',\n       'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'M1', 'M10', 'M11', 'M12', 'M13',\n       'M14', 'M15', 'M16', 'M17', 'M18', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',\n       'M8', 'M9', 'P1', 'P10', 'P11', 'P12', 'P13', 'P2', 'P3', 'P4', 'P5',\n       'P6', 'P7', 'P8', 'P9', 'S1', 'S10', 'S11', 'S12', 'S2', 'S3', 'S4',\n       'S5', 'S6', 'S7', 'S8', 'S9', 'V1', 'V10', 'V11', 'V12', 'V13', 'V2',\n       'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'forward_returns',\n       'risk_free_rate', 'market_forward_excess_returns'],\n      dtype='object')\nTest columns: Index(['date_id', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'E1',\n       'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17', 'E18', 'E19',\n       'E2', 'E20', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'I1', 'I2', 'I3',\n       'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'M1', 'M10', 'M11', 'M12', 'M13',\n       'M14', 'M15', 'M16', 'M17', 'M18', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',\n       'M8', 'M9', 'P1', 'P10', 'P11', 'P12', 'P13', 'P2', 'P3', 'P4', 'P5',\n       'P6', 'P7', 'P8', 'P9', 'S1', 'S10', 'S11', 'S12', 'S2', 'S3', 'S4',\n       'S5', 'S6', 'S7', 'S8', 'S9', 'V1', 'V10', 'V11', 'V12', 'V13', 'V2',\n       'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'is_scored',\n       'lagged_forward_returns', 'lagged_risk_free_rate',\n       'lagged_market_forward_excess_returns'],\n      dtype='object')\n","output_type":"stream"}],"execution_count":4},{"cell_type":"code","source":"print(\"Missing values in train:\")\nprint(train_df.isnull().sum())\n\nprint(\"Missing values in test:\")\nprint(test_df.isnull().sum())","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:26:37.458395Z","iopub.execute_input":"2025-10-11T18:26:37.458840Z","iopub.status.idle":"2025-10-11T18:26:37.479727Z","shell.execute_reply.started":"2025-10-11T18:26:37.458811Z","shell.execute_reply":"2025-10-11T18:26:37.478512Z"},"collapsed":true,"jupyter":{"outputs_hidden":true}},"outputs":[{"name":"stdout","text":"Missing values in train:\ndate_id                             0\nD1                                  0\nD2                                  0\nD3                                  0\nD4                                  0\n                                 ... \nV8                               1006\nV9                               4539\nforward_returns                     0\nrisk_free_rate                      0\nmarket_forward_excess_returns       0\nLength: 98, dtype: int64\nMissing values in test:\ndate_id                                 0\nD1                                      0\nD2                                      0\nD3                                      0\nD4                                      0\n                                       ..\nV9                                      0\nis_scored                               0\nlagged_forward_returns                  0\nlagged_risk_free_rate                   0\nlagged_market_forward_excess_returns    0\nLength: 99, dtype: int64\n","output_type":"stream"}],"execution_count":5},{"cell_type":"code","source":"print(\"Train data summary:\\n\", train_df.describe())","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:26:42.720319Z","iopub.execute_input":"2025-10-11T18:26:42.720801Z","iopub.status.idle":"2025-10-11T18:26:42.923152Z","shell.execute_reply.started":"2025-10-11T18:26:42.720775Z","shell.execute_reply":"2025-10-11T18:26:42.921971Z"},"collapsed":true,"jupyter":{"outputs_hidden":true}},"outputs":[{"name":"stdout","text":"Train data summary:\n            date_id           D1           D2           D3           D4  \\\ncount  8990.000000  8990.000000  8990.000000  8990.000000  8990.000000   \nmean   4494.500000     0.031591     0.031591     0.047831     0.575195   \nstd    2595.333794     0.174917     0.174917     0.213420     0.494341   \nmin       0.000000     0.000000     0.000000     0.000000     0.000000   \n25%    2247.250000     0.000000     0.000000     0.000000     0.000000   \n50%    4494.500000     0.000000     0.000000     0.000000     1.000000   \n75%    6741.750000     0.000000     0.000000     0.000000     1.000000   \nmax    8989.000000     1.000000     1.000000     1.000000     1.000000   \n\n                D5           D6           D7           D8           D9  ...  \\\ncount  8990.000000  8990.000000  8990.000000  8990.000000  8990.000000  ...   \nmean      0.190656    -0.238042     0.045717     0.142825     0.143159  ...   \nstd       0.392840     0.425909     0.208883     0.349914     0.350254  ...   \nmin       0.000000    -1.000000     0.000000     0.000000     0.000000  ...   \n25%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \n50%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \n75%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \nmax       1.000000     0.000000     1.000000     1.000000     1.000000  ...   \n\n                V3           V4           V5           V6           V7  \\\ncount  7984.000000  7984.000000  7478.000000  7984.000000  7479.000000   \nmean      0.489553     0.506930     0.372494     0.287179     0.148270   \nstd       0.306230     0.306554     1.153280     0.312238     1.326879   \nmin       0.000661     0.000661    -2.723527     0.000661    -2.027551   \n25%       0.207011     0.236111    -0.472864     0.000661    -0.797168   \n50%       0.492394     0.519180     0.275162     0.180225    -0.097670   \n75%       0.760582     0.772487     1.125069     0.515873     0.795763   \nmax       1.000000     1.000000     6.809912     1.000000    12.678264   \n\n                V8           V9  forward_returns  risk_free_rate  \\\ncount  7984.000000  4451.000000      8990.000000     8990.000000   \nmean      0.303908     0.129227         0.000469        0.000107   \nstd       0.351109     1.277273         0.010551        0.000088   \nmin       0.000661    -1.497420        -0.039754       -0.000004   \n25%       0.000661    -0.738242        -0.004324        0.000008   \n50%       0.101025    -0.170825         0.000659        0.000095   \n75%       0.590030     0.685907         0.005900        0.000193   \nmax       1.000000    12.997536         0.040661        0.000317   \n\n       market_forward_excess_returns  \ncount                    8990.000000  \nmean                        0.000051  \nstd                         0.010568  \nmin                        -0.040582  \n25%                        -0.004759  \n50%                         0.000252  \n75%                         0.005479  \nmax                         0.040551  \n\n[8 rows x 98 columns]\n","output_type":"stream"}],"execution_count":6},{"cell_type":"code","source":"print(\"Train data types:\\n\", train_df.dtypes)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:26:58.298363Z","iopub.execute_input":"2025-10-11T18:26:58.298725Z","iopub.status.idle":"2025-10-11T18:26:58.305902Z","shell.execute_reply.started":"2025-10-11T18:26:58.298700Z","shell.execute_reply":"2025-10-11T18:26:58.304698Z"}},"outputs":[{"name":"stdout","text":"Train data types:\n date_id                            int64\nD1                                 int64\nD2                                 int64\nD3                                 int64\nD4                                 int64\n                                  ...   \nV8                               float64\nV9                               float64\nforward_returns                  float64\nrisk_free_rate                   float64\nmarket_forward_excess_returns    float64\nLength: 98, dtype: object\n","output_type":"stream"}],"execution_count":7},{"cell_type":"code","source":"print(train_df[['V8', 'V9']].isnull().mean() * 100)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:27:04.230794Z","iopub.execute_input":"2025-10-11T18:27:04.231119Z","iopub.status.idle":"2025-10-11T18:27:04.243017Z","shell.execute_reply.started":"2025-10-11T18:27:04.231095Z","shell.execute_reply":"2025-10-11T18:27:04.241818Z"}},"outputs":[{"name":"stdout","text":"V8    11.190211\nV9    50.489433\ndtype: float64\n","output_type":"stream"}],"execution_count":8},{"cell_type":"code","source":"train_df.loc[:, 'V8'] = train_df['V8'].fillna(train_df['V8'].mean())\ntrain_df.loc[:, 'V9'] = train_df['V9'].ffill()","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:27:09.812052Z","iopub.execute_input":"2025-10-11T18:27:09.812355Z","iopub.status.idle":"2025-10-11T18:27:09.826009Z","shell.execute_reply.started":"2025-10-11T18:27:09.812332Z","shell.execute_reply":"2025-10-11T18:27:09.824934Z"}},"outputs":[],"execution_count":9},{"cell_type":"code","source":"print(train_df[['V8', 'V9']].isnull().sum())","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:27:13.941292Z","iopub.execute_input":"2025-10-11T18:27:13.941639Z","iopub.status.idle":"2025-10-11T18:27:13.950270Z","shell.execute_reply.started":"2025-10-11T18:27:13.941592Z","shell.execute_reply":"2025-10-11T18:27:13.949069Z"}},"outputs":[{"name":"stdout","text":"V8       0\nV9    4539\ndtype: int64\n","output_type":"stream"}],"execution_count":10},{"cell_type":"code","source":"train_df['V9'] = train_df['V9'].ffill().bfill()","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:28:38.273258Z","iopub.execute_input":"2025-10-11T18:28:38.273581Z","iopub.status.idle":"2025-10-11T18:28:38.282952Z","shell.execute_reply.started":"2025-10-11T18:28:38.273559Z","shell.execute_reply":"2025-10-11T18:28:38.281995Z"}},"outputs":[],"execution_count":11},{"cell_type":"code","source":"print(train_df[['V9']].isnull().sum())","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:28:55.123123Z","iopub.execute_input":"2025-10-11T18:28:55.123453Z","iopub.status.idle":"2025-10-11T18:28:55.131379Z","shell.execute_reply.started":"2025-10-11T18:28:55.123430Z","shell.execute_reply":"2025-10-11T18:28:55.130203Z"}},"outputs":[{"name":"stdout","text":"V9    0\ndtype: int64\n","output_type":"stream"}],"execution_count":12},{"cell_type":"markdown","source":"One-Hot Encoding","metadata":{}},{"cell_type":"code","source":"train_df['date_id'] = pd.to_datetime(train_df['date_id'])\ntrain_df['day_of_week'] = train_df['date_id'].dt.day_name()","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:51:01.565328Z","iopub.execute_input":"2025-10-11T18:51:01.565724Z","iopub.status.idle":"2025-10-11T18:51:01.584165Z","shell.execute_reply.started":"2025-10-11T18:51:01.565700Z","shell.execute_reply":"2025-10-11T18:51:01.582003Z"}},"outputs":[],"execution_count":13},{"cell_type":"code","source":"test_df['date_id'] = pd.to_datetime(test_df['date_id'])\ntest_df['day_of_week'] = test_df['date_id'].dt.day_name()","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:51:10.002770Z","iopub.execute_input":"2025-10-11T18:51:10.003400Z","iopub.status.idle":"2025-10-11T18:51:10.013265Z","shell.execute_reply.started":"2025-10-11T18:51:10.003350Z","shell.execute_reply":"2025-10-11T18:51:10.011791Z"}},"outputs":[],"execution_count":14},{"cell_type":"code","source":"train_encoded = pd.get_dummies(train_df, columns=['day_of_week'], dtype=int)\ntest_encoded = pd.get_dummies(test_df, columns=['day_of_week'], dtype=int)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:52:14.249532Z","iopub.execute_input":"2025-10-11T18:52:14.249961Z","iopub.status.idle":"2025-10-11T18:52:14.286039Z","shell.execute_reply.started":"2025-10-11T18:52:14.249935Z","shell.execute_reply":"2025-10-11T18:52:14.284557Z"}},"outputs":[],"execution_count":15},{"cell_type":"code","source":"test_encoded = test_encoded.reindex(columns=train_encoded.columns, fill_value=0)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:52:33.489902Z","iopub.execute_input":"2025-10-11T18:52:33.490220Z","iopub.status.idle":"2025-10-11T18:52:33.497248Z","shell.execute_reply.started":"2025-10-11T18:52:33.490197Z","shell.execute_reply":"2025-10-11T18:52:33.496018Z"}},"outputs":[],"execution_count":16},{"cell_type":"markdown","source":"Separate Variables","metadata":{}},{"cell_type":"code","source":"#Target variable\ny_train = train_encoded['forward_returns']","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:56:11.262935Z","iopub.execute_input":"2025-10-11T18:56:11.263273Z","iopub.status.idle":"2025-10-11T18:56:11.273375Z","shell.execute_reply.started":"2025-10-11T18:56:11.263248Z","shell.execute_reply":"2025-10-11T18:56:11.272003Z"}},"outputs":[],"execution_count":19},{"cell_type":"code","source":"#Independent variable\nx_train = train_encoded.drop(['forward_returns', 'date_id'], axis=1)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:56:30.039460Z","iopub.execute_input":"2025-10-11T18:56:30.039914Z","iopub.status.idle":"2025-10-11T18:56:30.048017Z","shell.execute_reply.started":"2025-10-11T18:56:30.039887Z","shell.execute_reply":"2025-10-11T18:56:30.046153Z"}},"outputs":[],"execution_count":20},{"cell_type":"code","source":"#Test Target and Independent variables \nif 'forward_returns' in test_encoded.columns:\n    y_test = test_encoded['forward_returns']\nelse:\n    y_test = None\n\nx_test = test_encoded.drop(['forward_returns', 'date_id'], axis=1, errors='ignore')  # Ignore if forward_returns not present","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T18:57:26.519761Z","iopub.execute_input":"2025-10-11T18:57:26.520119Z","iopub.status.idle":"2025-10-11T18:57:26.527421Z","shell.execute_reply.started":"2025-10-11T18:57:26.520094Z","shell.execute_reply":"2025-10-11T18:57:26.526172Z"}},"outputs":[],"execution_count":21},{"cell_type":"markdown","source":"Logistic Regression","metadata":{}},{"cell_type":"code","source":"#Use Random Forest to train the model\nrf_model = RandomForestRegressor(n_estimators=100, random_state=42) #100 trees","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:18:43.169827Z","iopub.execute_input":"2025-10-11T19:18:43.170753Z","iopub.status.idle":"2025-10-11T19:18:43.176038Z","shell.execute_reply.started":"2025-10-11T19:18:43.170719Z","shell.execute_reply":"2025-10-11T19:18:43.174824Z"}},"outputs":[],"execution_count":24},{"cell_type":"code","source":"#Creating an imputer to impute missing values with the mean of the column\nimputer = SimpleImputer(missing_values=np.nan, strategy='mean')","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:25:14.614457Z","iopub.execute_input":"2025-10-11T19:25:14.614850Z","iopub.status.idle":"2025-10-11T19:25:14.620311Z","shell.execute_reply.started":"2025-10-11T19:25:14.614825Z","shell.execute_reply":"2025-10-11T19:25:14.618937Z"}},"outputs":[],"execution_count":29},{"cell_type":"code","source":"#Fitting the imputer on training data\nimputer.fit(x_train)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:25:39.303093Z","iopub.execute_input":"2025-10-11T19:25:39.303427Z","iopub.status.idle":"2025-10-11T19:25:39.349824Z","shell.execute_reply.started":"2025-10-11T19:25:39.303404Z","shell.execute_reply":"2025-10-11T19:25:39.348072Z"}},"outputs":[{"execution_count":30,"output_type":"execute_result","data":{"text/plain":"SimpleImputer()","text/html":"<style>#sk-container-id-1 {color: black;background-color: white;}#sk-container-id-1 pre{padding: 0;}#sk-container-id-1 div.sk-toggleable {background-color: white;}#sk-container-id-1 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-1 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-1 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-1 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-1 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-1 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-1 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-1 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-1 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-1 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-1 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-1 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-1 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-1 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-1 div.sk-item {position: relative;z-index: 1;}#sk-container-id-1 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-1 div.sk-item::before, #sk-container-id-1 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-1 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-1 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-1 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-1 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-1 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-1 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-1 div.sk-label-container {text-align: center;}#sk-container-id-1 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-1 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-1\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>SimpleImputer()</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-1\" type=\"checkbox\" checked><label for=\"sk-estimator-id-1\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div>"},"metadata":{}}],"execution_count":30},{"cell_type":"code","source":"# Transform both train and test sets (fill missing values with column mean)\nx_train_imputed = imputer.transform(x_train)\nx_test_imputed = imputer.transform(x_test)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:26:05.041309Z","iopub.execute_input":"2025-10-11T19:26:05.041740Z","iopub.status.idle":"2025-10-11T19:26:05.079365Z","shell.execute_reply.started":"2025-10-11T19:26:05.041713Z","shell.execute_reply":"2025-10-11T19:26:05.078103Z"}},"outputs":[],"execution_count":31},{"cell_type":"code","source":"#Using the imputed features to train the model\nrf_model.fit(x_train_imputed, y_train)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:26:34.441517Z","iopub.execute_input":"2025-10-11T19:26:34.441876Z","iopub.status.idle":"2025-10-11T19:27:34.211683Z","shell.execute_reply.started":"2025-10-11T19:26:34.441853Z","shell.execute_reply":"2025-10-11T19:27:34.210658Z"}},"outputs":[{"execution_count":32,"output_type":"execute_result","data":{"text/plain":"RandomForestRegressor(random_state=42)","text/html":"<style>#sk-container-id-2 {color: black;background-color: white;}#sk-container-id-2 pre{padding: 0;}#sk-container-id-2 div.sk-toggleable {background-color: white;}#sk-container-id-2 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-2 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-2 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-2 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-2 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-2 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-2 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-2 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-2 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-2 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-2 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-2 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-2 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-2 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-2 div.sk-item {position: relative;z-index: 1;}#sk-container-id-2 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-2 div.sk-item::before, #sk-container-id-2 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-2 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-2 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-2 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-2 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-2 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-2 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-2 div.sk-label-container {text-align: center;}#sk-container-id-2 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-2 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-2\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>RandomForestRegressor(random_state=42)</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-2\" type=\"checkbox\" checked><label for=\"sk-estimator-id-2\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">RandomForestRegressor</label><div class=\"sk-toggleable__content\"><pre>RandomForestRegressor(random_state=42)</pre></div></div></div></div></div>"},"metadata":{}}],"execution_count":32},{"cell_type":"code","source":"# Predict using the imputed test data\ny_pred = rf_model.predict(x_test_imputed)","metadata":{"trusted":true,"execution":{"iopub.status.busy":"2025-10-11T19:27:53.367432Z","iopub.execute_input":"2025-10-11T19:27:53.367833Z","iopub.status.idle":"2025-10-11T19:27:53.382962Z","shell.execute_reply.started":"2025-10-11T19:27:53.367806Z","shell.execute_reply":"2025-10-11T19:27:53.382011Z"}},"outputs":[],"execution_count":33},{"cell_type":"markdown","source":"Evaluate the model","metadata":{}},{"cell_type":"code","source":"","metadata":{"trusted":true},"outputs":[],"execution_count":null}]}
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "1527279e",
+   "metadata": {
+    "_cell_guid": "b1076dfc-b9ad-4769-8c92-a6c4dae69d19",
+    "_uuid": "8f2839f25d086af736a60e9eeb907d3b93b6e0e5",
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:24:40.910070Z",
+     "iopub.status.busy": "2025-10-15T11:24:40.909226Z",
+     "iopub.status.idle": "2025-10-15T11:24:42.746102Z",
+     "shell.execute_reply": "2025-10-15T11:24:42.744961Z"
+    },
+    "papermill": {
+     "duration": 1.851118,
+     "end_time": "2025-10-15T11:24:42.747646",
+     "exception": false,
+     "start_time": "2025-10-15T11:24:40.896528",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/kaggle/input/hull-tactical-market-prediction/train.csv\n",
+      "/kaggle/input/hull-tactical-market-prediction/test.csv\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_inference_server.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_gateway.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/__init__.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/templates.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/base_gateway.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/relay.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/kaggle_evaluation.proto\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/__init__.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2_grpc.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/__init__.py\n"
+     ]
+    }
+   ],
+   "source": [
+    "# This Python 3 environment comes with many helpful analytics libraries installed\n",
+    "# It is defined by the kaggle/python Docker image: https://github.com/kaggle/docker-python\n",
+    "# For example, here's several helpful packages to load\n",
+    "\n",
+    "import numpy as np # linear algebra\n",
+    "import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)\n",
+    "\n",
+    "# Input data files are available in the read-only \"../input/\" directory\n",
+    "# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory\n",
+    "\n",
+    "import os\n",
+    "for dirname, _, filenames in os.walk('/kaggle/input'):\n",
+    "    for filename in filenames:\n",
+    "        print(os.path.join(dirname, filename))\n",
+    "\n",
+    "# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using \"Save & Run All\" \n",
+    "# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "9f26c1f6",
+   "metadata": {
+    "papermill": {
+     "duration": 0.006753,
+     "end_time": "2025-10-15T11:24:42.761815",
+     "exception": false,
+     "start_time": "2025-10-15T11:24:42.755062",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Competition: Hull Tactical - Market Prediction\n",
+    "**Author:** Yagazie Anyanwu  \n",
+    "**Kaggle Profile:** [https://www.kaggle.com/yagazieanyanwu]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "d446ff5c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:24:42.777440Z",
+     "iopub.status.busy": "2025-10-15T11:24:42.776983Z",
+     "iopub.status.idle": "2025-10-15T11:25:04.520177Z",
+     "shell.execute_reply": "2025-10-15T11:25:04.519352Z"
+    },
+    "papermill": {
+     "duration": 21.753058,
+     "end_time": "2025-10-15T11:25:04.521891",
+     "exception": false,
+     "start_time": "2025-10-15T11:24:42.768833",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "2025-10-15 11:24:46.444258: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered\n",
+      "WARNING: All log messages before absl::InitializeLog() is called are written to STDERR\n",
+      "E0000 00:00:1760527486.676524      13 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered\n",
+      "E0000 00:00:1760527486.743227      13 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import polars as pl\n",
+    "import matplotlib.pyplot as plt\n",
+    "import yfinance as yf\n",
+    "import tensorflow as tf\n",
+    "\n",
+    "import tensorflow as tf\n",
+    "from tensorflow.keras import layers\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.preprocessing import StandardScaler\n",
+    "from sklearn.linear_model import LinearRegression\n",
+    "from sklearn.ensemble import RandomForestRegressor\n",
+    "from sklearn.impute import SimpleImputer\n",
+    "from sklearn.metrics import mean_squared_error, r2_score\n",
+    "\n",
+    "import statsmodels.api as sm\n",
+    "import statsmodels.tsa.api as tsa\n",
+    "\n",
+    "from scipy import stats, optimize, signal"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "cd3dc75c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:04.537870Z",
+     "iopub.status.busy": "2025-10-15T11:25:04.537213Z",
+     "iopub.status.idle": "2025-10-15T11:25:04.545860Z",
+     "shell.execute_reply": "2025-10-15T11:25:04.544733Z"
+    },
+    "papermill": {
+     "duration": 0.018375,
+     "end_time": "2025-10-15T11:25:04.547617",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:04.529242",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/kaggle/input/hull-tactical-market-prediction/train.csv\n",
+      "/kaggle/input/hull-tactical-market-prediction/test.csv\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_inference_server.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/default_gateway.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/__init__.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/templates.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/base_gateway.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/relay.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/kaggle_evaluation.proto\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/__init__.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/kaggle_evaluation_pb2_grpc.py\n",
+      "/kaggle/input/hull-tactical-market-prediction/kaggle_evaluation/core/generated/__init__.py\n"
+     ]
+    }
+   ],
+   "source": [
+    "for dirname, _, filenames in os.walk('/kaggle/input'):\n",
+    "    for filename in filenames:\n",
+    "        print(os.path.join(dirname, filename))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "6d82a98d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:04.563619Z",
+     "iopub.status.busy": "2025-10-15T11:25:04.563227Z",
+     "iopub.status.idle": "2025-10-15T11:25:04.899977Z",
+     "shell.execute_reply": "2025-10-15T11:25:04.899137Z"
+    },
+    "papermill": {
+     "duration": 0.346677,
+     "end_time": "2025-10-15T11:25:04.901808",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:04.555131",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_path = '/kaggle/input/hull-tactical-market-prediction/train.csv'\n",
+    "test_path = '/kaggle/input/hull-tactical-market-prediction/test.csv'\n",
+    "\n",
+    "train_df = pd.read_csv(train_path)\n",
+    "test_df = pd.read_csv(test_path)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "51457263",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:04.917495Z",
+     "iopub.status.busy": "2025-10-15T11:25:04.917132Z",
+     "iopub.status.idle": "2025-10-15T11:25:04.924953Z",
+     "shell.execute_reply": "2025-10-15T11:25:04.923913Z"
+    },
+    "papermill": {
+     "duration": 0.017352,
+     "end_time": "2025-10-15T11:25:04.926521",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:04.909169",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train shape: (8990, 98)\n",
+      "Test shape: (10, 99)\n",
+      "Train columns: Index(['date_id', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'E1',\n",
+      "       'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17', 'E18', 'E19',\n",
+      "       'E2', 'E20', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'I1', 'I2', 'I3',\n",
+      "       'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'M1', 'M10', 'M11', 'M12', 'M13',\n",
+      "       'M14', 'M15', 'M16', 'M17', 'M18', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',\n",
+      "       'M8', 'M9', 'P1', 'P10', 'P11', 'P12', 'P13', 'P2', 'P3', 'P4', 'P5',\n",
+      "       'P6', 'P7', 'P8', 'P9', 'S1', 'S10', 'S11', 'S12', 'S2', 'S3', 'S4',\n",
+      "       'S5', 'S6', 'S7', 'S8', 'S9', 'V1', 'V10', 'V11', 'V12', 'V13', 'V2',\n",
+      "       'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'forward_returns',\n",
+      "       'risk_free_rate', 'market_forward_excess_returns'],\n",
+      "      dtype='object')\n",
+      "Test columns: Index(['date_id', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'E1',\n",
+      "       'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17', 'E18', 'E19',\n",
+      "       'E2', 'E20', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'I1', 'I2', 'I3',\n",
+      "       'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'M1', 'M10', 'M11', 'M12', 'M13',\n",
+      "       'M14', 'M15', 'M16', 'M17', 'M18', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7',\n",
+      "       'M8', 'M9', 'P1', 'P10', 'P11', 'P12', 'P13', 'P2', 'P3', 'P4', 'P5',\n",
+      "       'P6', 'P7', 'P8', 'P9', 'S1', 'S10', 'S11', 'S12', 'S2', 'S3', 'S4',\n",
+      "       'S5', 'S6', 'S7', 'S8', 'S9', 'V1', 'V10', 'V11', 'V12', 'V13', 'V2',\n",
+      "       'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'is_scored',\n",
+      "       'lagged_forward_returns', 'lagged_risk_free_rate',\n",
+      "       'lagged_market_forward_excess_returns'],\n",
+      "      dtype='object')\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train shape:\", train_df.shape)\n",
+    "print(\"Test shape:\", test_df.shape)\n",
+    "\n",
+    "print(\"Train columns:\", train_df.columns)\n",
+    "print(\"Test columns:\", test_df.columns)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "3251198d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:04.942836Z",
+     "iopub.status.busy": "2025-10-15T11:25:04.942170Z",
+     "iopub.status.idle": "2025-10-15T11:25:04.959847Z",
+     "shell.execute_reply": "2025-10-15T11:25:04.958672Z"
+    },
+    "papermill": {
+     "duration": 0.027466,
+     "end_time": "2025-10-15T11:25:04.961357",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:04.933891",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Missing values in train:\n",
+      "date_id                             0\n",
+      "D1                                  0\n",
+      "D2                                  0\n",
+      "D3                                  0\n",
+      "D4                                  0\n",
+      "                                 ... \n",
+      "V8                               1006\n",
+      "V9                               4539\n",
+      "forward_returns                     0\n",
+      "risk_free_rate                      0\n",
+      "market_forward_excess_returns       0\n",
+      "Length: 98, dtype: int64\n",
+      "Missing values in test:\n",
+      "date_id                                 0\n",
+      "D1                                      0\n",
+      "D2                                      0\n",
+      "D3                                      0\n",
+      "D4                                      0\n",
+      "                                       ..\n",
+      "V9                                      0\n",
+      "is_scored                               0\n",
+      "lagged_forward_returns                  0\n",
+      "lagged_risk_free_rate                   0\n",
+      "lagged_market_forward_excess_returns    0\n",
+      "Length: 99, dtype: int64\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Missing values in train:\")\n",
+    "print(train_df.isnull().sum())\n",
+    "\n",
+    "print(\"Missing values in test:\")\n",
+    "print(test_df.isnull().sum())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "899d5eef",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:04.978135Z",
+     "iopub.status.busy": "2025-10-15T11:25:04.977427Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.158949Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.157988Z"
+    },
+    "papermill": {
+     "duration": 0.19156,
+     "end_time": "2025-10-15T11:25:05.160453",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:04.968893",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train data summary:\n",
+      "            date_id           D1           D2           D3           D4  \\\n",
+      "count  8990.000000  8990.000000  8990.000000  8990.000000  8990.000000   \n",
+      "mean   4494.500000     0.031591     0.031591     0.047831     0.575195   \n",
+      "std    2595.333794     0.174917     0.174917     0.213420     0.494341   \n",
+      "min       0.000000     0.000000     0.000000     0.000000     0.000000   \n",
+      "25%    2247.250000     0.000000     0.000000     0.000000     0.000000   \n",
+      "50%    4494.500000     0.000000     0.000000     0.000000     1.000000   \n",
+      "75%    6741.750000     0.000000     0.000000     0.000000     1.000000   \n",
+      "max    8989.000000     1.000000     1.000000     1.000000     1.000000   \n",
+      "\n",
+      "                D5           D6           D7           D8           D9  ...  \\\n",
+      "count  8990.000000  8990.000000  8990.000000  8990.000000  8990.000000  ...   \n",
+      "mean      0.190656    -0.238042     0.045717     0.142825     0.143159  ...   \n",
+      "std       0.392840     0.425909     0.208883     0.349914     0.350254  ...   \n",
+      "min       0.000000    -1.000000     0.000000     0.000000     0.000000  ...   \n",
+      "25%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \n",
+      "50%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \n",
+      "75%       0.000000     0.000000     0.000000     0.000000     0.000000  ...   \n",
+      "max       1.000000     0.000000     1.000000     1.000000     1.000000  ...   \n",
+      "\n",
+      "                V3           V4           V5           V6           V7  \\\n",
+      "count  7984.000000  7984.000000  7478.000000  7984.000000  7479.000000   \n",
+      "mean      0.489553     0.506930     0.372494     0.287179     0.148270   \n",
+      "std       0.306230     0.306554     1.153280     0.312238     1.326879   \n",
+      "min       0.000661     0.000661    -2.723527     0.000661    -2.027551   \n",
+      "25%       0.207011     0.236111    -0.472864     0.000661    -0.797168   \n",
+      "50%       0.492394     0.519180     0.275162     0.180225    -0.097670   \n",
+      "75%       0.760582     0.772487     1.125069     0.515873     0.795763   \n",
+      "max       1.000000     1.000000     6.809912     1.000000    12.678264   \n",
+      "\n",
+      "                V8           V9  forward_returns  risk_free_rate  \\\n",
+      "count  7984.000000  4451.000000      8990.000000     8990.000000   \n",
+      "mean      0.303908     0.129227         0.000469        0.000107   \n",
+      "std       0.351109     1.277273         0.010551        0.000088   \n",
+      "min       0.000661    -1.497420        -0.039754       -0.000004   \n",
+      "25%       0.000661    -0.738242        -0.004324        0.000008   \n",
+      "50%       0.101025    -0.170825         0.000659        0.000095   \n",
+      "75%       0.590030     0.685907         0.005900        0.000193   \n",
+      "max       1.000000    12.997536         0.040661        0.000317   \n",
+      "\n",
+      "       market_forward_excess_returns  \n",
+      "count                    8990.000000  \n",
+      "mean                        0.000051  \n",
+      "std                         0.010568  \n",
+      "min                        -0.040582  \n",
+      "25%                        -0.004759  \n",
+      "50%                         0.000252  \n",
+      "75%                         0.005479  \n",
+      "max                         0.040551  \n",
+      "\n",
+      "[8 rows x 98 columns]\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train data summary:\\n\", train_df.describe())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "e7e762dd",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.176980Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.176416Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.182666Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.181645Z"
+    },
+    "papermill": {
+     "duration": 0.016146,
+     "end_time": "2025-10-15T11:25:05.184176",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.168030",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train data types:\n",
+      " date_id                            int64\n",
+      "D1                                 int64\n",
+      "D2                                 int64\n",
+      "D3                                 int64\n",
+      "D4                                 int64\n",
+      "                                  ...   \n",
+      "V8                               float64\n",
+      "V9                               float64\n",
+      "forward_returns                  float64\n",
+      "risk_free_rate                   float64\n",
+      "market_forward_excess_returns    float64\n",
+      "Length: 98, dtype: object\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"Train data types:\\n\", train_df.dtypes)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "35f0551c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.201981Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.201051Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.211779Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.210721Z"
+    },
+    "papermill": {
+     "duration": 0.021141,
+     "end_time": "2025-10-15T11:25:05.213225",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.192084",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "V8    11.190211\n",
+      "V9    50.489433\n",
+      "dtype: float64\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(train_df[['V8', 'V9']].isnull().mean() * 100)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "f663d850",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.229511Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.229171Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.239314Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.238661Z"
+    },
+    "papermill": {
+     "duration": 0.019827,
+     "end_time": "2025-10-15T11:25:05.240809",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.220982",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_df.loc[:, 'V8'] = train_df['V8'].fillna(train_df['V8'].mean())\n",
+    "train_df.loc[:, 'V9'] = train_df['V9'].ffill()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "f901ff05",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.257275Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.256930Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.263974Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.263022Z"
+    },
+    "papermill": {
+     "duration": 0.016973,
+     "end_time": "2025-10-15T11:25:05.265501",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.248528",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "V8       0\n",
+      "V9    4539\n",
+      "dtype: int64\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(train_df[['V8', 'V9']].isnull().sum())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "f7e4f021",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.282047Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.281738Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.289505Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.288537Z"
+    },
+    "papermill": {
+     "duration": 0.018182,
+     "end_time": "2025-10-15T11:25:05.291374",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.273192",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_df['V9'] = train_df['V9'].ffill().bfill()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "0128c248",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.308474Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.308118Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.314879Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.313930Z"
+    },
+    "papermill": {
+     "duration": 0.016905,
+     "end_time": "2025-10-15T11:25:05.316263",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.299358",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "V9    0\n",
+      "dtype: int64\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(train_df[['V9']].isnull().sum())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "311b4bdc",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007473,
+     "end_time": "2025-10-15T11:25:05.331475",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.324002",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "One-Hot Encoding"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "aea47539",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.347891Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.347609Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.361603Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.360668Z"
+    },
+    "papermill": {
+     "duration": 0.024278,
+     "end_time": "2025-10-15T11:25:05.363264",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.338986",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_df['date_id'] = pd.to_datetime(train_df['date_id'])\n",
+    "train_df['day_of_week'] = train_df['date_id'].dt.day_name()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "2efa8915",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.380388Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.379982Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.386905Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.385967Z"
+    },
+    "papermill": {
+     "duration": 0.017469,
+     "end_time": "2025-10-15T11:25:05.388704",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.371235",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "test_df['date_id'] = pd.to_datetime(test_df['date_id'])\n",
+    "test_df['day_of_week'] = test_df['date_id'].dt.day_name()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "f60442d2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.406428Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.405467Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.434223Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.433334Z"
+    },
+    "papermill": {
+     "duration": 0.039328,
+     "end_time": "2025-10-15T11:25:05.436073",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.396745",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "train_encoded = pd.get_dummies(train_df, columns=['day_of_week'], dtype=int)\n",
+    "test_encoded = pd.get_dummies(test_df, columns=['day_of_week'], dtype=int)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "76ce60f2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.461943Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.461262Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.467367Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.466264Z"
+    },
+    "papermill": {
+     "duration": 0.020436,
+     "end_time": "2025-10-15T11:25:05.468912",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.448476",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "test_encoded = test_encoded.reindex(columns=train_encoded.columns, fill_value=0)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "f56998ba",
+   "metadata": {
+    "papermill": {
+     "duration": 0.010889,
+     "end_time": "2025-10-15T11:25:05.490577",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.479688",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Separate Variables"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "cba13f69",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.514962Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.514632Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.519501Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.518545Z"
+    },
+    "papermill": {
+     "duration": 0.019529,
+     "end_time": "2025-10-15T11:25:05.521144",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.501615",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Target variable\n",
+    "y_train = train_encoded['forward_returns']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "f83bfebb",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.541648Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.540992Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.547708Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.546834Z"
+    },
+    "papermill": {
+     "duration": 0.017458,
+     "end_time": "2025-10-15T11:25:05.549304",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.531846",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Independent variable\n",
+    "x_train = train_encoded.drop(['forward_returns', 'date_id'], axis=1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "ae55d886",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.565759Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.565465Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.571071Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.570223Z"
+    },
+    "papermill": {
+     "duration": 0.015644,
+     "end_time": "2025-10-15T11:25:05.572625",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.556981",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Test Target and Independent variables \n",
+    "if 'forward_returns' in test_encoded.columns:\n",
+    "    y_test = test_encoded['forward_returns']\n",
+    "else:\n",
+    "    y_test = None\n",
+    "\n",
+    "x_test = test_encoded.drop(['forward_returns', 'date_id'], axis=1, errors='ignore')  # Ignore if forward_returns not present"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "37ffdac4",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007329,
+     "end_time": "2025-10-15T11:25:05.587585",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.580256",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Logistic Regression"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "3f84d3fa",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.604713Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.604380Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.608955Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.608082Z"
+    },
+    "papermill": {
+     "duration": 0.015528,
+     "end_time": "2025-10-15T11:25:05.610561",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.595033",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Use Random Forest to train the model\n",
+    "rf_model = RandomForestRegressor(n_estimators=100, random_state=42) #100 trees"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "c86d6334",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.627455Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.626808Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.631254Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.630372Z"
+    },
+    "papermill": {
+     "duration": 0.014557,
+     "end_time": "2025-10-15T11:25:05.632904",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.618347",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Creating an imputer to impute missing values with the mean of the column\n",
+    "imputer = SimpleImputer(missing_values=np.nan, strategy='mean')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "b33e977d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.649704Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.649391Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.686164Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.685275Z"
+    },
+    "papermill": {
+     "duration": 0.046992,
+     "end_time": "2025-10-15T11:25:05.687804",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.640812",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-1 {color: black;background-color: white;}#sk-container-id-1 pre{padding: 0;}#sk-container-id-1 div.sk-toggleable {background-color: white;}#sk-container-id-1 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-1 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-1 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-1 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-1 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-1 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-1 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-1 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-1 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-1 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-1 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-1 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-1 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-1 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-1 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-1 div.sk-item {position: relative;z-index: 1;}#sk-container-id-1 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-1 div.sk-item::before, #sk-container-id-1 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-1 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-1 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-1 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-1 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-1 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-1 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-1 div.sk-label-container {text-align: center;}#sk-container-id-1 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-1 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-1\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>SimpleImputer()</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-1\" type=\"checkbox\" checked><label for=\"sk-estimator-id-1\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">SimpleImputer</label><div class=\"sk-toggleable__content\"><pre>SimpleImputer()</pre></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "SimpleImputer()"
+      ]
+     },
+     "execution_count": 23,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#Fitting the imputer on training data\n",
+    "imputer.fit(x_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "b8488b43",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.706002Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.705386Z",
+     "iopub.status.idle": "2025-10-15T11:25:05.737821Z",
+     "shell.execute_reply": "2025-10-15T11:25:05.736993Z"
+    },
+    "papermill": {
+     "duration": 0.043032,
+     "end_time": "2025-10-15T11:25:05.739469",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.696437",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Transform both train and test sets (fill missing values with column mean)\n",
+    "x_train_imputed = imputer.transform(x_train)\n",
+    "x_test_imputed = imputer.transform(x_test)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "d2d01ccd",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:05.756657Z",
+     "iopub.status.busy": "2025-10-15T11:25:05.756002Z",
+     "iopub.status.idle": "2025-10-15T11:25:54.986139Z",
+     "shell.execute_reply": "2025-10-15T11:25:54.985112Z"
+    },
+    "papermill": {
+     "duration": 49.248042,
+     "end_time": "2025-10-15T11:25:54.995433",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:05.747391",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>#sk-container-id-2 {color: black;background-color: white;}#sk-container-id-2 pre{padding: 0;}#sk-container-id-2 div.sk-toggleable {background-color: white;}#sk-container-id-2 label.sk-toggleable__label {cursor: pointer;display: block;width: 100%;margin-bottom: 0;padding: 0.3em;box-sizing: border-box;text-align: center;}#sk-container-id-2 label.sk-toggleable__label-arrow:before {content: \"▸\";float: left;margin-right: 0.25em;color: #696969;}#sk-container-id-2 label.sk-toggleable__label-arrow:hover:before {color: black;}#sk-container-id-2 div.sk-estimator:hover label.sk-toggleable__label-arrow:before {color: black;}#sk-container-id-2 div.sk-toggleable__content {max-height: 0;max-width: 0;overflow: hidden;text-align: left;background-color: #f0f8ff;}#sk-container-id-2 div.sk-toggleable__content pre {margin: 0.2em;color: black;border-radius: 0.25em;background-color: #f0f8ff;}#sk-container-id-2 input.sk-toggleable__control:checked~div.sk-toggleable__content {max-height: 200px;max-width: 100%;overflow: auto;}#sk-container-id-2 input.sk-toggleable__control:checked~label.sk-toggleable__label-arrow:before {content: \"▾\";}#sk-container-id-2 div.sk-estimator input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-label input.sk-toggleable__control:checked~label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 input.sk-hidden--visually {border: 0;clip: rect(1px 1px 1px 1px);clip: rect(1px, 1px, 1px, 1px);height: 1px;margin: -1px;overflow: hidden;padding: 0;position: absolute;width: 1px;}#sk-container-id-2 div.sk-estimator {font-family: monospace;background-color: #f0f8ff;border: 1px dotted black;border-radius: 0.25em;box-sizing: border-box;margin-bottom: 0.5em;}#sk-container-id-2 div.sk-estimator:hover {background-color: #d4ebff;}#sk-container-id-2 div.sk-parallel-item::after {content: \"\";width: 100%;border-bottom: 1px solid gray;flex-grow: 1;}#sk-container-id-2 div.sk-label:hover label.sk-toggleable__label {background-color: #d4ebff;}#sk-container-id-2 div.sk-serial::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: 0;}#sk-container-id-2 div.sk-serial {display: flex;flex-direction: column;align-items: center;background-color: white;padding-right: 0.2em;padding-left: 0.2em;position: relative;}#sk-container-id-2 div.sk-item {position: relative;z-index: 1;}#sk-container-id-2 div.sk-parallel {display: flex;align-items: stretch;justify-content: center;background-color: white;position: relative;}#sk-container-id-2 div.sk-item::before, #sk-container-id-2 div.sk-parallel-item::before {content: \"\";position: absolute;border-left: 1px solid gray;box-sizing: border-box;top: 0;bottom: 0;left: 50%;z-index: -1;}#sk-container-id-2 div.sk-parallel-item {display: flex;flex-direction: column;z-index: 1;position: relative;background-color: white;}#sk-container-id-2 div.sk-parallel-item:first-child::after {align-self: flex-end;width: 50%;}#sk-container-id-2 div.sk-parallel-item:last-child::after {align-self: flex-start;width: 50%;}#sk-container-id-2 div.sk-parallel-item:only-child::after {width: 0;}#sk-container-id-2 div.sk-dashed-wrapped {border: 1px dashed gray;margin: 0 0.4em 0.5em 0.4em;box-sizing: border-box;padding-bottom: 0.4em;background-color: white;}#sk-container-id-2 div.sk-label label {font-family: monospace;font-weight: bold;display: inline-block;line-height: 1.2em;}#sk-container-id-2 div.sk-label-container {text-align: center;}#sk-container-id-2 div.sk-container {/* jupyter's `normalize.less` sets `[hidden] { display: none; }` but bootstrap.min.css set `[hidden] { display: none !important; }` so we also need the `!important` here to be able to override the default hidden behavior on the sphinx rendered scikit-learn.org. See: https://github.com/scikit-learn/scikit-learn/issues/21755 */display: inline-block !important;position: relative;}#sk-container-id-2 div.sk-text-repr-fallback {display: none;}</style><div id=\"sk-container-id-2\" class=\"sk-top-container\"><div class=\"sk-text-repr-fallback\"><pre>RandomForestRegressor(random_state=42)</pre><b>In a Jupyter environment, please rerun this cell to show the HTML representation or trust the notebook. <br />On GitHub, the HTML representation is unable to render, please try loading this page with nbviewer.org.</b></div><div class=\"sk-container\" hidden><div class=\"sk-item\"><div class=\"sk-estimator sk-toggleable\"><input class=\"sk-toggleable__control sk-hidden--visually\" id=\"sk-estimator-id-2\" type=\"checkbox\" checked><label for=\"sk-estimator-id-2\" class=\"sk-toggleable__label sk-toggleable__label-arrow\">RandomForestRegressor</label><div class=\"sk-toggleable__content\"><pre>RandomForestRegressor(random_state=42)</pre></div></div></div></div></div>"
+      ],
+      "text/plain": [
+       "RandomForestRegressor(random_state=42)"
+      ]
+     },
+     "execution_count": 25,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "#Using the imputed features to train the model\n",
+    "rf_model.fit(x_train_imputed, y_train)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "396f34a0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.014158Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.013537Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.024102Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.023186Z"
+    },
+    "papermill": {
+     "duration": 0.022301,
+     "end_time": "2025-10-15T11:25:55.025904",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.003603",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Predict using the imputed test data\n",
+    "y_pred = rf_model.predict(x_test_imputed)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "29a59833",
+   "metadata": {
+    "papermill": {
+     "duration": 0.008115,
+     "end_time": "2025-10-15T11:25:55.042365",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.034250",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "Evaluate the model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "e407ea63",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.060135Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.059800Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.064196Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.063319Z"
+    },
+    "papermill": {
+     "duration": 0.015146,
+     "end_time": "2025-10-15T11:25:55.065751",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.050605",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "MIN_INVESTMENT = 0\n",
+    "MAX_INVESTMENT = 2\n",
+    "\n",
+    "trading_days_per_yr = 252"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "id": "245193e2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.083178Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.082853Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.088203Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.087272Z"
+    },
+    "papermill": {
+     "duration": 0.015934,
+     "end_time": "2025-10-15T11:25:55.089808",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.073874",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Adding predictions to the solution DF as 'position'\n",
+    "solution_df = test_df.copy()\n",
+    "solution_df['position'] = y_pred"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "409a8fdd",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.107126Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.106558Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.113812Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.112895Z"
+    },
+    "papermill": {
+     "duration": 0.017634,
+     "end_time": "2025-10-15T11:25:55.115470",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.097836",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#clipping\n",
+    "min_pred, max_pred = solution_df['position'].min(), solution_df['position'].max()\n",
+    "solution_df['position'] = (\n",
+    "    2 * (solution_df['position'] - min_pred) / (max_pred - min_pred)\n",
+    ").clip(0, 2)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "7e3c91b6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.133362Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.132466Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.138972Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.138123Z"
+    },
+    "papermill": {
+     "duration": 0.017042,
+     "end_time": "2025-10-15T11:25:55.140584",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.123542",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "solution_df['position'] = np.clip(solution_df['position'], -1, 1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "9d6bf668",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.157985Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.157439Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.163102Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.162333Z"
+    },
+    "papermill": {
+     "duration": 0.016021,
+     "end_time": "2025-10-15T11:25:55.164694",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.148673",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "#Compute the strategy returns\n",
+    "solution_df['strategy_returns'] = (\n",
+    "    solution_df['lagged_risk_free_rate'] * (1 - solution_df['position']) +\n",
+    "    solution_df['position'] * solution_df['lagged_forward_returns']\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "id": "16eeb6d3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.182903Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.182127Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.186799Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.185953Z"
+    },
+    "papermill": {
+     "duration": 0.015493,
+     "end_time": "2025-10-15T11:25:55.188302",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.172809",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Compute excess returns over risk-free\n",
+    "strategy_excess_returns = solution_df['strategy_returns'] - solution_df['lagged_risk_free_rate']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "id": "cfc713d6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.205869Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.205539Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.210519Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.209574Z"
+    },
+    "papermill": {
+     "duration": 0.015521,
+     "end_time": "2025-10-15T11:25:55.211972",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.196451",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Cumulative compounded excess returns\n",
+    "strategy_excess_cumulative = (1 + strategy_excess_returns).prod()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "id": "a5eec0d6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.230126Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.229138Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.233678Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.232904Z"
+    },
+    "papermill": {
+     "duration": 0.015008,
+     "end_time": "2025-10-15T11:25:55.235125",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.220117",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Mean excess return per period (geometric mean)\n",
+    "strategy_mean_excess_return = strategy_excess_cumulative ** (1 / len(solution_df)) - 1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "id": "d5313c57",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.252337Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.251963Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.256419Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.255625Z"
+    },
+    "papermill": {
+     "duration": 0.01465,
+     "end_time": "2025-10-15T11:25:55.257851",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.243201",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Volatility (standard deviation of returns)\n",
+    "strategy_std = solution_df['strategy_returns'].std()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "id": "38d532b8",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.276104Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.274725Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.279924Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.278990Z"
+    },
+    "papermill": {
+     "duration": 0.015435,
+     "end_time": "2025-10-15T11:25:55.281380",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.265945",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Handle division-by-zero case\n",
+    "if strategy_std == 0:\n",
+    "    raise ValueError('Division by zero, strategy std is zero')\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "id": "13eb3cd4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.298740Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.298441Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.302765Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.301827Z"
+    },
+    "papermill": {
+     "duration": 0.014674,
+     "end_time": "2025-10-15T11:25:55.304225",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.289551",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# Annualized Sharpe ratio\n",
+    "sharpe = strategy_mean_excess_return / strategy_std * np.sqrt(trading_days_per_yr)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "id": "3636af88",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.321730Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.321415Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.327120Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.326205Z"
+    },
+    "papermill": {
+     "duration": 0.01613,
+     "end_time": "2025-10-15T11:25:55.328628",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.312498",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Sharpe Ratio: 5.92\n",
+      "Annualized Volatility: 6.06%\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Annualized volatility (%)\n",
+    "strategy_volatility = float(strategy_std * np.sqrt(trading_days_per_yr) * 100)\n",
+    "\n",
+    "print(f\"Sharpe Ratio: {sharpe:.2f}\")\n",
+    "print(f\"Annualized Volatility: {strategy_volatility:.2f}%\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "id": "020fe340",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.346208Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.345872Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.357230Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.356429Z"
+    },
+    "papermill": {
+     "duration": 0.021893,
+     "end_time": "2025-10-15T11:25:55.358674",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.336781",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "class ParticipantVisibleError(Exception):\n",
+    "    pass\n",
+    "\n",
+    "\n",
+    "def score(solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str) -> float:\n",
+    "    \"\"\"\n",
+    "    Calculates a custom evaluation metric (volatility-adjusted Sharpe ratio)\n",
+    "    adjusted for your dataset's column names.\n",
+    "\n",
+    "    This metric penalizes strategies that take on significantly more volatility\n",
+    "    than the underlying market.\n",
+    "\n",
+    "    Returns:\n",
+    "        float: The calculated adjusted Sharpe ratio.\n",
+    "    \"\"\"\n",
+    "\n",
+    "    # --- 1️⃣ Basic validation ---\n",
+    "    if not pd.api.types.is_numeric_dtype(submission['prediction']):\n",
+    "        raise ParticipantVisibleError('Predictions must be numeric')\n",
+    "\n",
+    "    # Align prediction (position) with the solution DataFrame\n",
+    "    solution = solution.copy()\n",
+    "    solution['position'] = submission['prediction']\n",
+    "\n",
+    "    # --- ✅ Replace clipping with rescaling ---\n",
+    "    # Rescale predictions to fill [0, 2] range (min → 0, max → 2)\n",
+    "    min_pred, max_pred = solution['position'].min(), solution['position'].max()\n",
+    "    if max_pred == min_pred:\n",
+    "        raise ParticipantVisibleError(\"Predictions are constant — cannot rescale to range [0, 2].\")\n",
+    "\n",
+    "    solution['position'] = (\n",
+    "        2 * (solution['position'] - min_pred) / (max_pred - min_pred)\n",
+    "    ).clip(0, 2)\n",
+    "\n",
+    "    # --- 2️⃣ Strategy returns ---\n",
+    "    solution['strategy_returns'] = (\n",
+    "        solution['lagged_risk_free_rate'] * (1 - solution['position']) +\n",
+    "        solution['position'] * solution['lagged_forward_returns']\n",
+    "    )\n",
+    "\n",
+    "    # --- 3️⃣ Strategy Sharpe ratio components ---\n",
+    "    strategy_excess_returns = solution['strategy_returns'] - solution['lagged_risk_free_rate']\n",
+    "    strategy_excess_cumulative = (1 + strategy_excess_returns).prod()\n",
+    "    strategy_mean_excess_return = strategy_excess_cumulative ** (1 / len(solution)) - 1\n",
+    "    strategy_std = solution['strategy_returns'].std()\n",
+    "\n",
+    "    trading_days_per_yr = 252\n",
+    "    if strategy_std == 0:\n",
+    "        raise ParticipantVisibleError('Division by zero, strategy std is zero')\n",
+    "\n",
+    "    sharpe = strategy_mean_excess_return / strategy_std * np.sqrt(trading_days_per_yr)\n",
+    "    strategy_volatility = float(strategy_std * np.sqrt(trading_days_per_yr) * 100)\n",
+    "\n",
+    "    # --- 4️⃣ Market Sharpe ratio components ---\n",
+    "    market_excess_returns = solution['lagged_forward_returns'] - solution['lagged_risk_free_rate']\n",
+    "    market_excess_cumulative = (1 + market_excess_returns).prod()\n",
+    "    market_mean_excess_return = market_excess_cumulative ** (1 / len(solution)) - 1\n",
+    "    market_std = solution['lagged_forward_returns'].std()\n",
+    "    market_volatility = float(market_std * np.sqrt(trading_days_per_yr) * 100)\n",
+    "\n",
+    "    if market_volatility == 0:\n",
+    "        raise ParticipantVisibleError('Division by zero, market std is zero')\n",
+    "\n",
+    "    # --- 5️⃣ Volatility penalty ---\n",
+    "    excess_vol = max(0, strategy_volatility / market_volatility - 1.2)\n",
+    "    vol_penalty = 1 + excess_vol\n",
+    "\n",
+    "    # --- 6️⃣ Return penalty ---\n",
+    "    return_gap = max(\n",
+    "        0,\n",
+    "        (market_mean_excess_return - strategy_mean_excess_return) * 100 * trading_days_per_yr,\n",
+    "    )\n",
+    "    return_penalty = 1 + (return_gap**2) / 100\n",
+    "\n",
+    "    # --- 7️⃣ Adjusted Sharpe ratio ---\n",
+    "    adjusted_sharpe = sharpe / (vol_penalty * return_penalty)\n",
+    "    adjusted_sharpe = min(float(adjusted_sharpe), 1_000_000)\n",
+    "\n",
+    "    # --- 📈 Print key metrics ---\n",
+    "    print(f\"Sharpe Ratio: {sharpe:.2f}\")\n",
+    "    print(f\"Annualized Volatility: {strategy_volatility:.2f}%\")\n",
+    "\n",
+    "    return adjusted_sharpe\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "id": "479b702f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-10-15T11:25:55.375911Z",
+     "iopub.status.busy": "2025-10-15T11:25:55.375597Z",
+     "iopub.status.idle": "2025-10-15T11:25:55.382110Z",
+     "shell.execute_reply": "2025-10-15T11:25:55.381346Z"
+    },
+    "papermill": {
+     "duration": 0.016833,
+     "end_time": "2025-10-15T11:25:55.383545",
+     "exception": false,
+     "start_time": "2025-10-15T11:25:55.366712",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Sample size: 10\n",
+      "Annualized return: 48.95%\n",
+      "Market annualized return: 52.97%\n"
+     ]
+    }
+   ],
+   "source": [
+    "# a) How many days of data?\n",
+    "n = len(solution_df)\n",
+    "print(\"Sample size:\", n)\n",
+    "\n",
+    "# b) Annualized return\n",
+    "total_ret = (1 + solution_df['strategy_returns']).prod() - 1\n",
+    "ann_ret = (1 + total_ret) ** (252 / n) - 1\n",
+    "print(f\"Annualized return: {ann_ret:.2%}\")\n",
+    "\n",
+    "# c) Compare to market\n",
+    "mkt_ret = (1 + solution_df['lagged_forward_returns']).prod() - 1\n",
+    "mkt_ann_ret = (1 + mkt_ret) ** (252 / n) - 1\n",
+    "print(f\"Market annualized return: {mkt_ann_ret:.2%}\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "none",
+   "dataSources": [
+    {
+     "databundleVersionId": 13750964,
+     "sourceId": 111543,
+     "sourceType": "competition"
+    }
+   ],
+   "dockerImageVersionId": 31153,
+   "isGpuEnabled": false,
+   "isInternetEnabled": true,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.13"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 82.20642,
+   "end_time": "2025-10-15T11:25:58.543024",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2025-10-15T11:24:36.336604",
+   "version": "2.6.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
